@@ -2,7 +2,9 @@
 #   all-in-one -> todo en un host
 #   server     -> backend + infraestructura
 #   kiosk      -> visión + player en la estación
-# Los servicios de aplicación se añaden cuando exista su código.
+# vision-service corre en all-in-one y en kiosk (nunca en server) y no depende de
+# Redis ni Postgres, porque en una estación separada esos servicios no existen.
+# Los demás servicios de aplicación se añaden cuando exista su código.
 services:
   postgres:
     image: postgres:16
@@ -19,8 +21,16 @@ services:
     profiles: [all-in-one, server]
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
 
-  # core-backend:   profiles: [all-in-one, server]
-  # vision-service: profiles: [all-in-one, kiosk]  (devices: /dev/video0)
+  vision-service:
+    build: ./services/vision-service
+    profiles: [all-in-one, kiosk]
+    restart: "no"
+    # La cámara (devices: /dev/video0) se añade en KIO-10.
+    environment:
+      # En una estación separada, define EVENT_TRANSPORT_URL en .env con la dirección del servidor.
+      EVENT_TRANSPORT_URL: ${EVENT_TRANSPORT_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
+
+  # core-backend: profiles: [all-in-one, server]
 
 volumes:
   pgdata:

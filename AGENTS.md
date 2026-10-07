@@ -4,7 +4,7 @@ Shared instructions for every AI coding agent working in this repository (Claude
 
 ## Project status
 
-No application code yet, no build, no tests. The design lives in [docs/kiosko-arquitectura-mvp.md](docs/kiosko-arquitectura-mvp.md) (Spanish, revision 2) and is the source of truth: read it before creating anything and update it when a decision changes. When code lands, add the build, lint and test commands here (including how to run a single test).
+Early stage: only the `services/vision-service` skeleton exists (KIO-6); backend, web and ML are not started. The design lives in [docs/kiosko-arquitectura-mvp.md](docs/kiosko-arquitectura-mvp.md) (Spanish, revision 2) and is the source of truth: read it before creating anything and update it when a decision changes. When code lands, add the build, lint and test commands here (including how to run a single test).
 
 ## What this is
 
@@ -17,6 +17,7 @@ A kiosk with a camera and a screen that picks the advertising based on who is st
 - `apps/web` (React, Vite, TypeScript): one app with `/admin` and `/player` routes (Chromium in kiosk mode), built and served as static files by the backend.
 - `ml/` (PyTorch): training and evaluation; only exports versioned `.onnx` models. Do not mix with the production service.
 - `contracts/`: versioned JSON schemas (`audience-event`, `campaign`). Python and Java validate against the same files; neither depends on the other's code.
+- `spec/`: one folder per feature with its requirements, design and tasks (see "Spec-driven workflow").
 - Docker Compose profiles: `all-in-one` (everything on one host) and `server` + `kiosk` (separate stations, including Raspberry Pi / ARM64).
 
 Flow: camera → vision → event on Redis (pub/sub) → Java adapter turns it into a domain event → rules engine → player.
@@ -53,13 +54,40 @@ These are proposals; confirm them with the team when the first code is written.
 - Never push directly to `develop` or `main`.
 - Commit messages in English.
 
+### Opening a pull request
+
+Never push or open a PR unless the user asks. When asked, write the body from `.github/pull_request_template.md` to a scratch file and open the PR with `gh`:
+
+```bash
+gh pr create --base develop --title "KIO-N <short description>" --body-file <file>
+```
+
+- The title is `KIO-N <short description>`, with the same words as the branch description and spaces instead of hyphens. Example: branch `feature/KIO-6-vision-skeleton` → title `KIO-6 vision skeleton`. The base is `develop`; only promotion PRs go from `develop` to `main`.
+- `## Links` comes first: the Trello card URL (read it from the Trello connector; if it is not available, ask the user) and the spec folder `spec/<branch name without feature/ or bugfix/>/`.
+- `## Description` comes second: what changed and why, taken from the diff and the spec, and what was tested and what was not.
+
+## Spec-driven workflow
+
+Every feature is built from three documents in `spec/<TASK>-<description>/`, for example `spec/KIO-6-vision-skeleton/`. The folder name is the branch name without the `feature/` or `bugfix/` prefix. The Trello card with the same `KIO-N` code is the source of the title and the first acceptance criteria.
+
+1. `requirements.md`: user stories with EARS acceptance criteria. Ids are `R1`, `R2`, … and sub-criteria `R1.1`. Include an introduction, an out-of-scope list and open questions. EARS forms: "When <event>, the system shall <response>", "While <state>, …", "If <condition>, then …", "The system shall …".
+2. `design.md`: overview, structure and architecture, interfaces and data, decisions and trade-offs, testing strategy, and a table mapping every requirement id to the part of the design that covers it.
+3. `tasks.md`: an ordered checklist (`- [ ] T1 …`), each task small, referencing requirement ids and ending with how to verify it. Tick tasks as they are done.
+
+Rules:
+
+- Order and gates: requirements → approval → design → approval → tasks → approval → implementation. Stop after each document and wait for the user's approval. Never write code before `tasks.md` is approved.
+- Specs are written in English and committed in the same branch and PR as the code. Do not add `spec/` to `.gitignore`.
+- If the design or code diverges from a requirement, update the spec first and tell the user.
+- Implement tasks in order, one at a time, and keep the task list current.
+
 ## CI
 
 `.github/workflows/ci.yml` runs on PRs and pushes to `develop` and `main`. Run the same checks locally before pushing:
 
 - Contracts: `check-jsonschema --check-metaschema contracts/*.schema.json`
-- Compose: `cp .env.example .env && docker compose --profile all-in-one config -q` (also `server`)
-- Vision (`services/vision-service`): `ruff check .`, `ruff format --check .`, `pytest`
+- Compose: `cp .env.example .env && docker compose --profile all-in-one config -q` (also `server` and `kiosk`)
+- Vision (`services/vision-service`): `pip install -e ".[dev]"`, then `ruff check .`, `ruff format --check .`, `pytest` (single test: `pytest tests/test_cli.py::test_main_prints_name_and_version`)
 - Backend (`services/core-backend`): `mvn -B verify`
 - Web (`apps/web`): `npm ci`, then the `lint`, `typecheck`, `test` and `build` scripts
 
