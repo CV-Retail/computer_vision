@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+# Java
+target/
+build/
+.gradle/
+# Node
+node_modules/
+dist/
+# ML
+ml/data/
+*.pt
+*.pth
+# Entorno y medios
+.env
+media/
+.DS_Store
+.idea/
+.vscode/

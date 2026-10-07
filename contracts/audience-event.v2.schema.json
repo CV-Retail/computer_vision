@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AudienceEvent",
+  "type": "object",
+  "required": ["schemaVersion", "kioskId", "timestamp", "motivo", "personas", "dwellMs"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "kioskId": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "motivo": { "enum": ["cambio_composicion", "latido", "cierre_dwell"] },
+    "dwellMs": { "type": "integer", "minimum": 0 },
+    "personas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edad"],
+        "additionalProperties": false,
+        "properties": {
+          "edad": { "$ref": "#/$defs/atributo" },
+          "genero": { "$ref": "#/$defs/atributo" },
+          "expresion": { "$ref": "#/$defs/atributo" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "atributo": {
+      "type": "object",
+      "required": ["valor", "confianza"],
+      "additionalProperties": false,
+      "properties": {
+        "valor": { "type": "string" },
+        "confianza": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

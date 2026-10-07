@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CampaignPackage",
+  "type": "object",
+  "required": ["schemaVersion", "storeId", "campaign"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "storeId": { "type": "string" },
+    "campaign": {
+      "type": "object",
+      "required": ["id", "name", "status", "priority", "schedule", "audience", "vetoes", "playlist"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "enum": ["draft", "active", "paused"] },
+        "priority": { "type": "integer" },
+        "schedule": {
+          "type": "object",
+          "required": ["from", "to"],
+          "properties": { "from": { "type": "string" }, "to": { "type": "string" } }
+        },
+        "audience": {
+          "type": "object",
+          "properties": {
+            "edad": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": { "min": { "type": "integer" }, "max": { "type": "integer" } }
+              }
+            },
+            "genero": { "type": ["string", "null"] },
+            "expresion": { "type": ["string", "null"] },
+            "minConfianza": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "vetoes": { "type": "array", "items": { "type": "string" } },
+        "playlist": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["mediaRef", "durationSec"],
+            "properties": { "mediaRef": { "type": "string" }, "durationSec": { "type": "integer" } }
+          }
+        }
+      }
+    }
+  }
+}
