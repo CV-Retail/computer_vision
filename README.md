@@ -74,6 +74,13 @@ docker compose --profile all-in-one up
 
 Cambia los valores `change-me` de `.env` antes de arrancar.
 
+## Flujo de trabajo (gitflow)
+
+- Se trabaja en `feature/<TAREA>-<descripcion>` o `bugfix/<TAREA>-<descripcion>` y se abre un PR hacia `develop`.
+- En cada PR y en cada push a `develop` corre el CI (`.github/workflows/ci.yml`): nombre de rama, contratos, Docker Compose y, cuando exista su código, visión, backend y web.
+- `develop` se promueve a `main` con un PR manual, solo si el CI de `develop` está en verde. También se aceptan `release/*` y `hotfix/*`.
+- Check obligatorio recomendado en la protección de ramas: `CI success`.
+
 ## Trabajo con agentes de IA
 
 Las instrucciones para Claude Code y Gemini CLI viven en [AGENTS.md](AGENTS.md) (en inglés). `CLAUDE.md` lo importa y `.gemini/settings.json` apunta a él, así que ambas herramientas siguen las mismas reglas. Edita las reglas solo en `AGENTS.md`.

@@ -1,0 +1,202 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch-name:
+    name: Branch name
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate gitflow branch names
+        env:
+          HEAD: ${{ github.head_ref }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          work='^(feature|bugfix)/[A-Za-z]+-[0-9]+-[a-z0-9-]+$'
+          rel='^(release|hotfix)/[A-Za-z0-9._-]+$'
+          ok=false
+          case "$BASE" in
+            develop)
+              [[ "$HEAD" =~ $work || "$HEAD" =~ $rel ]] && ok=true ;;
+            main)
+              [[ "$HEAD" == "develop" || "$HEAD" =~ $rel ]] && ok=true ;;
+          esac
+          if [ "$ok" != true ]; then
+            echo "::error::Branch '$HEAD' is not allowed to open a PR into '$BASE'."
+            echo "Into develop: feature/<TASK>-<description>, bugfix/<TASK>-<description>, release/*, hotfix/*  (e.g. feature/KIO-12-rules-engine)"
+            echo "Into main:    develop, release/*, hotfix/*"
+            exit 1
+          fi
+          echo "Branch '$HEAD' -> '$BASE' is valid."
+
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install check-jsonschema
+        run: pip install check-jsonschema
+      - name: Validate JSON schemas
+        run: check-jsonschema --check-metaschema contracts/*.schema.json
+
+  compose:
+    name: Docker Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate profiles
+        # The kiosk profile has no services yet; add it here when vision-service is in compose.
+        run: |
+          cp .env.example .env
+          for profile in all-in-one server; do
+            echo "Validating profile: $profile"
+            docker compose --profile "$profile" config -q
+          done
+
+  vision:
+    name: Vision service
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/vision-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect project
+        id: detect
+        working-directory: .
+        run: |
+          if [ -f services/vision-service/pyproject.toml ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "skipped: no vision-service project yet"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.detect.outputs.found == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: services/vision-service/pyproject.toml
+      - name: Install
+        if: steps.detect.outputs.found == 'true'
+        run: pip install -e ".[dev]"
+      - name: Lint
+        if: steps.detect.outputs.found == 'true'
+        run: ruff check .
+      - name: Format check
+        if: steps.detect.outputs.found == 'true'
+        run: ruff format --check .
+      - name: Test
+        if: steps.detect.outputs.found == 'true'
+        run: pytest
+
+  backend:
+    name: Core backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: services/core-backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect project
+        id: detect
+        working-directory: .
+        run: |
+          if [ -f services/core-backend/pom.xml ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "skipped: no core-backend project yet"
+          fi
+      - uses: actions/setup-java@v4
+        if: steps.detect.outputs.found == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: services/core-backend/pom.xml
+      - name: Verify (compile, tests, Modulith checks)
+        if: steps.detect.outputs.found == 'true'
+        run: mvn -B -ntp verify
+
+  web:
+    name: Web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect project
+        id: detect
+        working-directory: .
+        run: |
+          if [ -f apps/web/package.json ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "skipped: no web project yet"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.found == 'true'
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        if: steps.detect.outputs.found == 'true'
+        run: npm ci
+      - name: Lint
+        if: steps.detect.outputs.found == 'true'
+        run: npm run lint --if-present
+      - name: Typecheck
+        if: steps.detect.outputs.found == 'true'
+        run: npm run typecheck --if-present
+      - name: Test
+        if: steps.detect.outputs.found == 'true'
+        run: npm test --if-present
+      - name: Build
+        if: steps.detect.outputs.found == 'true'
+        run: npm run build --if-present
+
+  ci-success:
+    name: CI success
+    if: always()
+    needs: [branch-name, contracts, compose, vision, backend, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::At least one required job did not succeed."
+              exit 1
+            fi
+          done
