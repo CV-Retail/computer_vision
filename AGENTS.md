@@ -4,7 +4,7 @@ Shared instructions for every AI coding agent working in this repository (Claude
 
 ## Project status
 
-Early stage: the `services/vision-service` (KIO-6) and `services/core-backend` (KIO-7) skeletons exist; web and ML are not started. The design lives in [docs/kiosko-arquitectura-mvp.md](docs/kiosko-arquitectura-mvp.md) (Spanish, revision 2) and is the source of truth: read it before creating anything and update it when a decision changes. When code lands, add the build, lint and test commands here (including how to run a single test).
+Early stage: the `services/vision-service` (KIO-6), `services/core-backend` (KIO-7) and `apps/web` (KIO-8) skeletons exist; ML is not started. The design lives in [docs/kiosko-arquitectura-mvp.md](docs/kiosko-arquitectura-mvp.md) (Spanish, revision 2) and is the source of truth: read it before creating anything and update it when a decision changes. When code lands, add the build, lint and test commands here (including how to run a single test).
 
 ## What this is
 
@@ -101,7 +101,7 @@ Rules:
 - Compose: `cp .env.example .env && docker compose --profile all-in-one config -q` (also `server` and `kiosk`)
 - Vision (`services/vision-service`): `pip install -e ".[dev]"`, then `ruff check .`, `ruff format --check .`, `pytest` (single test: `pytest tests/test_cli.py::test_main_prints_name_and_version`)
 - Backend (`services/core-backend`): `./mvnw -B -ntp verify` (unit tests only: `./mvnw test`; one unit test: `./mvnw -Dtest=ModularityTest test`; one integration test: `./mvnw verify -Dit.test=HealthEndpointIT -Dtest=NoMatch -Dsurefire.failIfNoSpecifiedTests=false`)
-- Web (`apps/web`): `npm ci`, then the `lint`, `typecheck`, `test` and `build` scripts
+- Web (`apps/web`): `npm ci`, then `npm run lint`, `npm run typecheck`, `npm run test` (single test: `npm run test -- src/test/App.test.tsx`), `npm run build`, and `docker build -t kiosko-web .`
 
 Component jobs skip until their project file exists (`pyproject.toml`, `pom.xml`, `package.json`). The single required check is `CI success`.
 
