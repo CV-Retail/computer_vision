@@ -1,0 +1,75 @@
+name: PR automation
+
+# Requests review from every member except the author and labels the PR from its branch name.
+# Not part of the required checks: a failure here never blocks a merge.
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+env:
+  # Update this list when someone joins or leaves the team (GITHUB_TOKEN cannot list collaborators).
+  MEMBERS: "RubenCameroAmador Juanjo1217"
+
+jobs:
+  setup:
+    name: Reviewers and labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+      HEAD: ${{ github.head_ref }}
+      BASE: ${{ github.base_ref }}
+    steps:
+      - name: Request reviewers (everyone except the author)
+        continue-on-error: true
+        run: |
+          author=$(printf '%s' "$AUTHOR" | tr '[:upper:]' '[:lower:]')
+          reviewers=()
+          for m in $MEMBERS; do
+            [ "$(printf '%s' "$m" | tr '[:upper:]' '[:lower:]')" = "$author" ] && continue
+            reviewers+=("-f" "reviewers[]=$m")
+          done
+          if [ "${#reviewers[@]}" -eq 0 ]; then
+            echo "No reviewers to request."
+            exit 0
+          fi
+          gh api -X POST "repos/$GH_REPO/pulls/$PR/requested_reviewers" "${reviewers[@]}" --silent
+          echo "Requested review from: ${reviewers[*]}"
+
+      - name: Ensure labels exist
+        continue-on-error: true
+        run: |
+          gh label create hotfix --color b60205 --description "Urgent fix on main" --force
+          gh label create release --color 0e8a16 --description "Release or promotion to main" --force
+
+      - name: Label from branch name
+        continue-on-error: true
+        run: |
+          labels=()
+          case "$HEAD" in
+            feature/*) labels+=("enhancement") ;;
+            bugfix/*)  labels+=("bug") ;;
+            hotfix/*)  labels+=("bug" "hotfix") ;;
+            release/*) labels+=("release") ;;
+          esac
+          if [ "$HEAD" = "develop" ] && [ "$BASE" = "main" ]; then
+            labels+=("release")
+          fi
+          if [ "${#labels[@]}" -eq 0 ]; then
+            echo "No label for branch '$HEAD'."
+            exit 0
+          fi
+          args=()
+          for l in "${labels[@]}"; do args+=("-f" "labels[]=$l"); done
+          gh api -X POST "repos/$GH_REPO/issues/$PR/labels" "${args[@]}" --silent
+          echo "Added labels: ${labels[*]}"

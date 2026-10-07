@@ -54,6 +54,8 @@ These are proposals; confirm them with the team when the first code is written.
 - Never push directly to `develop` or `main`.
 - Commit messages in English.
 
+When a PR is opened, `.github/workflows/pr-automation.yml` requests review from every member except the author and labels it from the branch name (`feature/` → `enhancement`, `bugfix/` → `bug`, `hotfix/` → `bug` + `hotfix`, `release/` or `develop` → `main` → `release`). The member list is in that file; update it when someone joins or leaves.
+
 ### Opening a pull request
 
 Never push or open a PR unless the user asks. When asked, write the body from `.github/pull_request_template.md` to a scratch file and open the PR with `gh`:
