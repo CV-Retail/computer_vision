@@ -45,6 +45,26 @@ These are proposals; confirm them with the team when the first code is written.
 - **TypeScript:** strict mode, a single app serving `/admin` and `/player`.
 - Keep schema field names as defined in `contracts/` (they are Spanish: `edad`, `genero`, `expresion`, `confianza`, `motivo`).
 
+## Git workflow (gitflow)
+
+- Work in `feature/<TASK>-<description>` or `bugfix/<TASK>-<description>` (for example `feature/KIO-12-rules-engine`; the `KIO` task-code prefix is an assumption to confirm). Open a PR into `develop`.
+- `develop` must stay stable: CI runs the full suite on every PR and on every push to it.
+- Promotion is a manual PR `develop` → `main`, merged only after `develop` is green. `release/*` and `hotfix/*` are also allowed (PRs into `main` and back into `develop`).
+- Never push directly to `develop` or `main`.
+- Commit messages in English.
+
+## CI
+
+`.github/workflows/ci.yml` runs on PRs and pushes to `develop` and `main`. Run the same checks locally before pushing:
+
+- Contracts: `check-jsonschema --check-metaschema contracts/*.schema.json`
+- Compose: `cp .env.example .env && docker compose --profile all-in-one config -q` (also `server`)
+- Vision (`services/vision-service`): `ruff check .`, `ruff format --check .`, `pytest`
+- Backend (`services/core-backend`): `mvn -B verify`
+- Web (`apps/web`): `npm ci`, then the `lint`, `typecheck`, `test` and `build` scripts
+
+Component jobs skip until their project file exists (`pyproject.toml`, `pom.xml`, `package.json`). The single required check is `CI success`.
+
 ## Agent boundaries
 
 Ask the user before:
