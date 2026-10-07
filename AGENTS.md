@@ -65,7 +65,7 @@ gh pr create --base develop --title "KIO-N <short description>" --body-file <fil
 ```
 
 - The title is `KIO-N <short description>`, with the same words as the branch description and spaces instead of hyphens. Example: branch `feature/KIO-6-vision-skeleton` → title `KIO-6 vision skeleton`. The base is `develop`; only promotion PRs go from `develop` to `main`.
-- `## Links` comes first: the Trello card URL (read it from the Trello connector; if it is not available, ask the user) and the spec folder `spec/<branch name without feature/ or bugfix/>/`.
+- `## Links` comes first: the Trello card as a markdown link whose text is the card title exactly as in Trello, for example `Trello card: [KIO-6 Esqueleto de vision-service](https://trello.com/c/lCrz4NLw/11-kio-6-esqueleto-de-vision-service)` (read title and URL from the Trello connector; if it is not available, ask the user), and the spec folder `spec/<branch name without feature/ or bugfix/>/`.
 - `## Description` comes second: what changed and why, taken from the diff and the spec, and what was tested and what was not.
 
 ## Spec-driven workflow

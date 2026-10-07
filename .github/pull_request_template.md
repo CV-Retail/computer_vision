@@ -1,7 +1,7 @@
 ## Links
 
-- Trello card: <!-- https://trello.com/c/... -->
-- Spec: <!-- spec/KIO-N-description/ -->
+- Trello card: [KIO-N Card title](https://trello.com/c/...) <!-- the link text is the card title exactly as in Trello -->
+- Spec: spec/KIO-N-description/
 
 ## Description
 
