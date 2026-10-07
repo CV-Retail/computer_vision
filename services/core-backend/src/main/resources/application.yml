@@ -1,0 +1,25 @@
+# All environment-specific values come from environment variables (see README).
+# A missing variable makes the application fail at startup naming the variable.
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      # Fail fast when the database is unreachable so the health endpoint answers DOWN in seconds.
+      connection-timeout: 5000
+  flyway:
+    # Portable SQL plus the migrations of the configured engine (postgresql, h2, ...).
+    locations: classpath:db/migration/common,classpath:db/migration/${DB_VENDOR}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
