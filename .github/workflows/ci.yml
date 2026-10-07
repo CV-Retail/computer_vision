@@ -65,10 +65,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate profiles
-        # The kiosk profile has no services yet; add it here when vision-service is in compose.
         run: |
           cp .env.example .env
-          for profile in all-in-one server; do
+          for profile in all-in-one server kiosk; do
             echo "Validating profile: $profile"
             docker compose --profile "$profile" config -q
           done
