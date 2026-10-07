@@ -138,7 +138,7 @@ jobs:
           cache-dependency-path: services/core-backend/pom.xml
       - name: Verify (compile, tests, Modulith checks)
         if: steps.detect.outputs.found == 'true'
-        run: mvn -B -ntp verify
+        run: ./mvnw -B -ntp verify
 
   web:
     name: Web app

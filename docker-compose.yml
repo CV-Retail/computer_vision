@@ -4,6 +4,7 @@
 #   kiosk      -> visión + player en la estación
 # vision-service corre en all-in-one y en kiosk (nunca en server) y no depende de
 # Redis ni Postgres, porque en una estación separada esos servicios no existen.
+# core-backend corre en all-in-one y en server (nunca en kiosk) y espera a Postgres.
 # Los demás servicios de aplicación se añaden cuando exista su código.
 services:
   postgres:
@@ -15,6 +16,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7
@@ -30,7 +36,21 @@ services:
       # En una estación separada, define EVENT_TRANSPORT_URL en .env con la dirección del servidor.
       EVENT_TRANSPORT_URL: ${EVENT_TRANSPORT_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
 
-  # core-backend: profiles: [all-in-one, server]
+  core-backend:
+    build: ./services/core-backend
+    profiles: [all-in-one, server]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Variables neutrales al motor de base de datos: cambiar de motor es solo configuración.
+      DB_VENDOR: postgresql
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "8080:8080"
 
 volumes:
   pgdata:
