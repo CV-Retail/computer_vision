@@ -4,7 +4,7 @@ Shared instructions for every AI coding agent working in this repository (Claude
 
 ## Project status
 
-Early stage: the `services/vision-service` (KIO-6), `services/core-backend` (KIO-7) and `apps/web` (KIO-8) skeletons exist; ML is not started. The design lives in [docs/kiosko-arquitectura-mvp.md](docs/kiosko-arquitectura-mvp.md) (Spanish, revision 2) and is the source of truth: read it before creating anything and update it when a decision changes. When code lands, add the build, lint and test commands here (including how to run a single test).
+Early stage: the `services/vision-service` (KIO-6), `services/core-backend` (KIO-7) and `apps/web` (KIO-8) skeletons exist and run together under Docker Compose (KIO-9); ML is not started. The design lives in [docs/kiosko-arquitectura-mvp.md](docs/kiosko-arquitectura-mvp.md) (Spanish, revision 3) and is the source of truth: read it before creating anything and update it when a decision changes. When code lands, add the build, lint and test commands here (including how to run a single test).
 
 ## What this is
 
@@ -14,13 +14,14 @@ A kiosk with a camera and a screen that picks the advertising based on who is st
 
 - `services/vision-service` (Python 3.11, OpenCV, ONNX Runtime): capture, detection, tracking and attributes. Publishes audience events; it does not know the backend.
 - `services/core-backend` (Java 21, Spring Boot, Spring Modulith with modules Campaigns, Rules, Reports; Postgres + Flyway): domain and rules engine. Sends playback orders to the player over WebSocket.
-- `apps/web` (React, Vite, TypeScript): one app with `/admin` and `/player` routes (Chromium in kiosk mode), built and served as static files by the backend.
+- `apps/web` (React, Vite, TypeScript): one app with `/admin` and `/player` routes (Chromium in kiosk mode on the station). It is served by its own nginx container (`web` service), not by the backend; the same nginx proxies `/api` and `/ws` to the backend, so the browser always talks to one origin.
 - `ml/` (PyTorch): training and evaluation; only exports versioned `.onnx` models. Do not mix with the production service.
 - `contracts/`: versioned JSON schemas (`audience-event`, `campaign`). Python and Java validate against the same files; neither depends on the other's code.
 - `spec/`: one folder per feature with its requirements, design and tasks (see "Spec-driven workflow").
-- Docker Compose profiles: `all-in-one` (everything on one host) and `server` + `kiosk` (separate stations, including Raspberry Pi / ARM64).
+- Docker Compose profiles: `all-in-one` (everything on one host) and `server` + `kiosk` (separate stations, including Raspberry Pi / ARM64). `server` = PostgreSQL, the event bus, `core-backend`, `web`; `kiosk` = `vision-service` only (the player is Chromium opening `http://<server>/player`).
+- Ports: the only application port published on the host is the web one (`WEB_PORT`, default 80). `core-backend` is internal; backend routes are `/api` and `/ws` (health stays on `/actuator/health`, internal). The event bus is published on `REDIS_BIND_ADDR:6379` (default `127.0.0.1`), always with `REDIS_PASSWORD`, and must stay on the local network. It speaks the Redis protocol but the image is **Valkey** (BSD-3-Clause): Redis 7.4+ is RSALv2/SSPLv1, which this project does not accept. The service and variables keep the names `redis` and `REDIS_*`; do not switch the image back to Redis.
 
-Flow: camera → vision → event on Redis (pub/sub) → Java adapter turns it into a domain event → rules engine → player.
+Flow: camera → vision → event on the Redis-protocol bus (Valkey, pub/sub) → Java adapter turns it into a domain event → rules engine → player.
 
 Cameras go through `ICameraSource` (USB/V4L2, CSI, RTSP), chosen by configuration. On Ubuntu pass `/dev/video0` to the container; on macOS Docker cannot see the webcam, so run vision directly on the host.
 
@@ -98,7 +99,7 @@ Rules:
 `.github/workflows/ci.yml` runs on PRs and pushes to `develop` and `main`. Run the same checks locally before pushing:
 
 - Contracts: `check-jsonschema --check-metaschema contracts/*.schema.json`
-- Compose: `cp .env.example .env && docker compose --profile all-in-one config -q` (also `server` and `kiosk`)
+- Compose: `cp .env.example .env && docker compose --profile all-in-one config -q` (also `server` and `kiosk`; `kiosk` must list only `vision-service`). CI also checks the nginx template (`nginx -t`, command in `apps/web/README.md`) and runs a `compose-smoke` job that starts the `server` profile with `docker compose up --wait` and checks `/admin`, `/player`, the `/api` proxy and Redis-protocol (Valkey) authentication. To run the stack: `docker compose --profile server up -d --build --wait`, and `docker compose --profile server down -v` to remove it.
 - Vision (`services/vision-service`): `pip install -e ".[dev]"`, then `ruff check .`, `ruff format --check .`, `pytest` (single test: `pytest tests/test_cli.py::test_main_prints_name_and_version`)
 - Backend (`services/core-backend`): `./mvnw -B -ntp verify` (unit tests only: `./mvnw test`; one unit test: `./mvnw -Dtest=ModularityTest test`; one integration test: `./mvnw verify -Dit.test=HealthEndpointIT -Dtest=NoMatch -Dsurefire.failIfNoSpecifiedTests=false`)
 - Web (`apps/web`): `npm ci`, then `npm run lint`, `npm run typecheck`, `npm run test` (single test: `npm run test -- src/test/App.test.tsx`), `npm run build`, and `docker build -t kiosko-web .`
