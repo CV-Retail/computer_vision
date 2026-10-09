@@ -60,9 +60,17 @@ docker build -t kiosko-core-backend .
 From the repository root, after `cp .env.example .env`:
 
 - **Everything on one host:** `docker compose --profile all-in-one up --build`.
-- **Server apart from the stations:** `docker compose --profile server up --build` on the server (PostgreSQL, Redis and this backend). The backend never runs under the `kiosk` profile.
+- **Server apart from the stations:** `docker compose --profile server up --build` on the server (PostgreSQL, the event bus, this backend and the web). The backend never runs under the `kiosk` profile.
 
-Compose builds `DB_URL`, `DB_USER`, `DB_PASSWORD` and `DB_VENDOR` from the `POSTGRES_*` variables, waits for PostgreSQL to be healthy, and publishes port 8080.
+Compose builds `DB_URL`, `DB_USER`, `DB_PASSWORD` and `DB_VENDOR` from the `POSTGRES_*` variables and waits for PostgreSQL to be healthy. **The backend does not publish a port on the host:** it is reachable only inside the Compose network, through the `web` service, which proxies `/api` and `/ws` to it (the REST endpoints under `/api` arrive with KIO-58 onward; today an unknown `/api/...` returns the backend's 404). `/actuator` is not proxied.
+
+To check its health from the host while it runs under Compose:
+
+```bash
+docker compose --profile server exec core-backend curl -fsS http://localhost:8080/actuator/health
+```
+
+The `curl localhost:8080/actuator/health` shown in "Run" applies when you start the backend yourself with `./mvnw spring-boot:run`, outside Compose.
 
 ## Architecture
 

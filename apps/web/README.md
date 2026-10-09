@@ -55,18 +55,49 @@ Run a single test file:
 npm run test -- src/test/App.test.tsx
 ```
 
-## Docker Containerization
+## Docker and Docker Compose
 
-Build the multi-stage Docker image using unprivileged Nginx:
+Build the multi-stage image (Node build, then unprivileged nginx):
 
 ```bash
 docker build -t kiosko-web .
 ```
 
-Run the container locally:
+The normal way to run it is through Compose, from the repository root (`cp .env.example .env` first):
 
 ```bash
-docker run -p 8080:8080 kiosko-web
+docker compose --profile server up --build      # or --profile all-in-one
 ```
 
-Open `http://localhost:8080/admin` or `http://localhost:8080/player`.
+The `web` service is the only application port published on the host: `http://localhost/admin` and `http://localhost/player` (the host port is `WEB_PORT`, default 80). It runs only on the server side; a station opens `http://<server>/player` in Chromium.
+
+### Reverse proxy
+
+nginx is configured in `nginx/default.conf.template`, rendered at container start from environment variables:
+
+| Route | Goes to |
+|---|---|
+| `/api/` | the backend (`BACKEND_HOST:BACKEND_PORT`), path unchanged, errors passed through |
+| `/ws` | the backend, with the WebSocket upgrade headers |
+| `/actuator/` | `404` (the backend health endpoint is never exposed) |
+| anything else | the single-page application (`index.html` fallback) |
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `BACKEND_HOST` | `core-backend` | Backend host name |
+| `BACKEND_PORT` | `8080` | Backend port |
+| `DNS_RESOLVER` | `127.0.0.11` | DNS server used to resolve the backend at request time |
+| `CLIENT_MAX_BODY_SIZE` | `100m` | Upload limit (provisional until media uploads are built) |
+
+The backend is resolved at request time, so it can be recreated without restarting this container.
+
+Check the nginx configuration without a backend:
+
+```bash
+docker run --rm \
+  -v "$PWD/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+  -e BACKEND_HOST=core-backend -e BACKEND_PORT=8080 -e DNS_RESOLVER=127.0.0.11 -e CLIENT_MAX_BODY_SIZE=100m \
+  nginxinc/nginx-unprivileged:alpine nginx -t
+```
+
+Running the image alone (`docker run -p 8080:8080 kiosko-web`) serves the application at `http://localhost:8080/admin` and `/player`, but `/api` answers `502` because there is no backend.

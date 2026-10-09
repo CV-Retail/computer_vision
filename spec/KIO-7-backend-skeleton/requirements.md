@@ -122,7 +122,7 @@ Acceptance criteria:
 
 - R9.1 The compose file shall declare `core-backend` under the profiles `all-in-one` and `server`, and shall not declare it under `kiosk`.
 - R9.2 When `docker compose --profile all-in-one up` or `--profile server up` runs, the system shall build and start the backend after PostgreSQL is ready, and the backend shall apply its migrations on PostgreSQL and report healthy.
-- R9.3 The backend shall publish its HTTP port on the host so the admin portal can later be reached from a laptop or tablet on the local network.
+- R9.3 The backend shall publish its HTTP port on the host so the admin portal can later be reached from a laptop or tablet on the local network. *(Replaced by KIO-9: the backend no longer publishes a host port; it is reached through the `web` proxy. See `spec/KIO-9-compose-complete/`.)*
 - R9.4 The database variables shall come from `.env`, with `.env.example` updated if a new variable is needed.
 - R9.5 When `docker compose config -q` runs for `all-in-one`, `server` and `kiosk`, the system shall report no errors.
 - R9.6 The `kiosk` profile shall remain startable without the backend, PostgreSQL or Redis.
