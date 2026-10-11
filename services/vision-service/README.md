@@ -56,14 +56,14 @@ The image uses `python:3.11-slim` (amd64 and arm64) and runs as a non-root user.
 
 From the repository root, after `cp .env.example .env`:
 
-- **Everything on one host:** `docker compose --profile all-in-one up --build` starts Postgres, Redis and `vision-service`.
+- **Everything on one host:** `docker compose --profile all-in-one up --build` starts PostgreSQL, the event bus (Valkey, Redis protocol), the backend, the web and `vision-service`.
 - **Server and station on separate hosts:**
-  - Server host: `docker compose --profile server up`.
-  - Station host: set `EVENT_TRANSPORT_URL` in `.env` to the server's address and run `docker compose --profile kiosk up --build`. Only `vision-service` starts there.
+  - Server host: set `REDIS_BIND_ADDR` in `.env` to the server's LAN address (the default `127.0.0.1` only listens on that machine) and run `docker compose --profile server up --build`. The event bus refuses to start without `REDIS_PASSWORD`.
+  - Station host: put `EVENT_TRANSPORT_URL=redis://:<password>@<server-host>:6379/0` in `.env` and run `docker compose --profile kiosk up --build`. Only `vision-service` starts there. Compose prints warnings about unset PostgreSQL variables; they are expected on a station and harmless. The player on the station is Chromium opening `http://<server>/player`.
 
-`vision-service` has no `depends_on`, so it starts on a station that has no Redis or Postgres.
+`vision-service` has no `depends_on`, so it starts on a station that has no event bus or Postgres. Keep the event bus port (6379) on the store's local network and never expose it to the internet.
 
-Known limitation: Redis is not published on a host port yet, so a separate station cannot reach the server's Redis. The skeleton does not read `EVENT_TRANSPORT_URL`, so nothing fails today. The event channel for remote stations is decided in KIO-9. The container prints its version and exits; it becomes a long-running process in later features.
+The skeleton does not read `EVENT_TRANSPORT_URL` yet (publishing arrives with KIO-20). The container prints its version and exits; it becomes a long-running process in later features.
 
 ## Rules
 

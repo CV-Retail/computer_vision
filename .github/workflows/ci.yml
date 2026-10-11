@@ -71,6 +71,82 @@ jobs:
             echo "Validating profile: $profile"
             docker compose --profile "$profile" config -q
           done
+      - name: Check profile contents
+        run: |
+          services() { docker compose --profile "$1" config --services | sort | tr '\n' ' '; }
+          fail() { echo "::error::$1"; exit 1; }
+          echo "kiosk:      $(services kiosk)"
+          echo "server:     $(services server)"
+          echo "all-in-one: $(services all-in-one)"
+          [ "$(services kiosk)" = "vision-service " ] || fail "The kiosk profile must contain only vision-service."
+          for profile in server all-in-one; do
+            for svc in postgres redis core-backend web; do
+              services "$profile" | grep -qw "$svc" || fail "Profile $profile must contain $svc."
+            done
+          done
+          services server | grep -qw vision-service && fail "The server profile must not contain vision-service."
+          echo "Profile contents are correct."
+      - name: Check nginx configuration
+        run: |
+          docker run --rm \
+            -v "$PWD/apps/web/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+            -e BACKEND_HOST=core-backend -e BACKEND_PORT=8080 \
+            -e DNS_RESOLVER=127.0.0.11 -e CLIENT_MAX_BODY_SIZE=100m \
+            nginxinc/nginx-unprivileged:alpine nginx -t
+
+  compose-smoke:
+    name: Compose smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      WEB_PORT: "8081"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          # Listen on all interfaces so a container can reach Redis through the host gateway,
+          # which simulates a remote station. Port 8081 avoids clashes with the runner.
+          printf 'WEB_PORT=%s\nREDIS_BIND_ADDR=0.0.0.0\n' "$WEB_PORT" >> .env
+      - name: Start the server profile
+        run: docker compose --profile server up -d --build --wait --wait-timeout 300
+      - name: Check web routes and the proxy
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          base="http://localhost:${WEB_PORT}"
+          for path in /admin /player; do
+            code=$(curl -s -o /tmp/page -w '%{http_code}' "$base$path")
+            [ "$code" = "200" ] || fail "$path returned $code"
+            grep -q 'id="root"' /tmp/page || fail "$path did not serve the application"
+          done
+          code=$(curl -s -o /tmp/api -w '%{http_code}' "$base/api/ping")
+          [ "$code" = "404" ] || fail "/api/ping returned $code, expected the backend 404"
+          grep -q 'id="root"' /tmp/api && fail "/api/ping returned the application instead of the backend response"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$base/actuator/health")
+          [ "$code" = "404" ] || fail "/actuator/health must not be exposed, got $code"
+          if curl -s -m 3 -o /dev/null http://localhost:8080/actuator/health; then
+            fail "The backend port 8080 must not be published on the host."
+          fi
+          echo "Routes and proxy are correct."
+      - name: Check Redis (Valkey) authentication
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          password=$(grep '^REDIS_PASSWORD=' .env | cut -d= -f2)
+          cli() { docker run --rm --add-host=host.docker.internal:host-gateway valkey/valkey:8 valkey-cli -h host.docker.internal "$@" 2>&1; }
+          # Capture the output first: with pipefail, "grep -q" closing the pipe would fail the pipeline.
+          out=$(cli -a "$password" --no-auth-warning ping)
+          [[ "$out" == *PONG* ]] || fail "Redis rejected the right password: $out"
+          out=$(cli -a wrong-password --no-auth-warning ping)
+          [[ "$out" == *WRONGPASS* ]] || fail "Redis accepted a wrong password: $out"
+          out=$(cli ping)
+          [[ "$out" == *NOAUTH* ]] || fail "Redis answered without a password: $out"
+          echo "Redis authentication is correct."
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose --profile server logs --no-color --tail 100
+      - name: Shut down
+        if: always()
+        run: docker compose --profile server down -v
 
   vision:
     name: Vision service
@@ -184,7 +260,7 @@ jobs:
   ci-success:
     name: CI success
     if: always()
-    needs: [branch-name, contracts, compose, vision, backend, web]
+    needs: [branch-name, contracts, compose, compose-smoke, vision, backend, web]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
