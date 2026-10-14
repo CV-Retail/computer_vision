@@ -31,6 +31,22 @@ class ArchitectureRulesDetectViolationsTest {
         assertFailsNaming(ArchitectureRules.INFRASTRUCTURE_IS_A_LEAF, "StrayClass");
     }
 
+    @Test
+    void layeringRuleFailsWhenAValueObjectUsesAnEntity() {
+        assertFailsNaming(ArchitectureRules.DOMAIN_INTERNAL_LAYERING, "BadValueObject");
+    }
+
+    @Test
+    void layeringRuleFailsWhenAnEventUsesAnEntity() {
+        assertFailsNaming(ArchitectureRules.DOMAIN_INTERNAL_LAYERING, "BadEvent");
+    }
+
+    @Test
+    void surfaceRuleFailsWhenTheSurfaceUsesAnInternalType() {
+        assertFailsNaming(
+                ArchitectureRules.publishedSurfaceIsSelfContained("com.cvretail.archfixtures.surface"), "BadView");
+    }
+
     private void assertFailsNaming(ArchRule rule, String offendingClass) {
         assertThatThrownBy(() -> rule.check(fixtures))
                 .isInstanceOf(AssertionError.class)

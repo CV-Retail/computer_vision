@@ -4,7 +4,7 @@ Shared instructions for every AI coding agent working in this repository (Claude
 
 ## Project status
 
-Early stage: the `services/vision-service` (KIO-6), `services/core-backend` (KIO-7) and `apps/web` (KIO-8) skeletons exist and run together under Docker Compose (KIO-9); ML is not started. The design lives in [docs/kiosko-arquitectura-mvp.md](docs/kiosko-arquitectura-mvp.md) (Spanish, revision 3) and is the source of truth: read it before creating anything and update it when a decision changes. When code lands, add the build, lint and test commands here (including how to run a single test).
+Early stage: the `services/vision-service` (KIO-6), `services/core-backend` (KIO-7) and `apps/web` (KIO-8) skeletons exist and run together under Docker Compose (KIO-9); the campaign domain (KIO-24) is implemented without persistence; ML is not started. The design lives in [docs/kiosko-arquitectura-mvp.md](docs/kiosko-arquitectura-mvp.md) (Spanish, revision 3) and is the source of truth: read it before creating anything and update it when a decision changes. When code lands, add the build, lint and test commands here (including how to run a single test).
 
 ## What this is
 
@@ -43,16 +43,16 @@ These are proposals; confirm them with the team when the first code is written.
 
 - **Language:** identifiers, comments, commit messages and this file are in English. User-facing UI strings may be Spanish. `README.md` and `docs/` stay in Spanish.
 - **Python 3.11:** type hints everywhere, `ruff` for lint and format, `pytest` for tests.
-- **Java 21:** respect Spring Modulith boundaries (Campaigns, Rules, Reports); no access to another module's internals. Schema changes only through Flyway migrations; never edit an applied migration. Unit tests are named `*Test` (no Spring context, database or network; run with `./mvnw test`); integration tests are named `*IT` (may start Spring and H2; run by `./mvnw verify`). Test domain and application logic with unit tests; keep integration tests few.
+- **Java 21:** respect Spring Modulith boundaries (Campaigns, Rules, Reports); no access to another module's internals. Schema changes only through Flyway migrations; never edit an applied migration. Unit tests are named `*Test` (no Spring context, database or network; run with `./mvnw test`); integration tests are named `*IT` (may start Spring and H2; run by `./mvnw verify`). Test domain and application logic with unit tests; keep integration tests few. The business behavior of every domain is specified as Gherkin scenarios in English under `src/test/resources/features/<module>/`, run by Cucumber through a `*Test` suite class, with the steps in a `bdd` test package; unit tests cover the technical details. Tag each scenario with the requirement ids it verifies (`@R11`).
 - **TypeScript:** strict mode, a single app serving `/admin` and `/player`.
 - Keep schema field names as defined in `contracts/` (they are Spanish: `edad`, `genero`, `expresion`, `confianza`, `motivo`).
 
 ## Backend architecture (core-backend)
 
-The backend follows Clean Architecture with DDD inside each Spring Modulith module (`campaigns`, `rules`, `reports`), with the packages `domain`, `application` and `infrastructure` (spec: `spec/KIO-7-backend-skeleton/`). Domain code starts in KIO-24.
+The backend follows Clean Architecture with DDD inside each Spring Modulith module (`campaigns`, `rules`, `reports`), with the packages `domain`, `application` and `infrastructure` (spec: `spec/KIO-7-backend-skeleton/`). Domain code started with KIO-24 (campaigns).
 
 - **Dependency rule:** `domain` depends on nothing but the Java standard library. `application` depends on `domain` (and on the published surface of other modules). `infrastructure` depends on both. Nothing depends on `infrastructure` except the Spring wiring. Modules talk only through their published surface, which is the module's base package (`domain`, `application` and `infrastructure` are internal). These rules are enforced by tests and break the build.
-- **Domain:** aggregates, entities, value objects, domain events and domain services; no Spring, JPA, Jakarta Persistence, Flyway, Jackson or JDBC.
+- **Domain:** aggregates, entities, value objects, domain events and domain services; no Spring, JPA, Jakarta Persistence, Flyway, Jackson or JDBC. Organize it in the sub-packages `entity`, `event`, `exception`, `repository`, `service` and `valueobject`; an architecture test enforces which may use which (`exception` nothing; `valueobject` → `exception`; `event` → `valueobject`; `service` → `valueobject`, `exception`; `entity` → all but `repository`; `repository` → `entity`, `valueobject`).
 - **Application:** use cases; repositories are declared as interfaces (ports) in `domain` or `application`.
 - **Infrastructure:** adapters (database, Redis, HTTP, WebSocket) implement the ports. Keep all vendor-specific code here.
 - **Database independence:** the domain never knows the database engine. Flyway loads `db/migration/common` (portable SQL) plus `db/migration/<vendor>`; supporting a new engine means a JDBC driver, a vendor migration folder and configuration, with no change in `domain` or `application`. Tests run on H2, which does not prove compatibility with other engines.
@@ -101,7 +101,7 @@ Rules:
 - Contracts: `check-jsonschema --check-metaschema contracts/*.schema.json`
 - Compose: `cp .env.example .env && docker compose --profile all-in-one config -q` (also `server` and `kiosk`; `kiosk` must list only `vision-service`). CI also checks the nginx template (`nginx -t`, command in `apps/web/README.md`) and runs a `compose-smoke` job that starts the `server` profile with `docker compose up --wait` and checks `/admin`, `/player`, the `/api` proxy and Redis-protocol (Valkey) authentication. To run the stack: `docker compose --profile server up -d --build --wait`, and `docker compose --profile server down -v` to remove it.
 - Vision (`services/vision-service`): `pip install -e ".[dev]"`, then `ruff check .`, `ruff format --check .`, `pytest` (single test: `pytest tests/test_cli.py::test_main_prints_name_and_version`)
-- Backend (`services/core-backend`): `./mvnw -B -ntp verify` (unit tests only: `./mvnw test`; one unit test: `./mvnw -Dtest=ModularityTest test`; one integration test: `./mvnw verify -Dit.test=HealthEndpointIT -Dtest=NoMatch -Dsurefire.failIfNoSpecifiedTests=false`)
+- Backend (`services/core-backend`): `./mvnw -B -ntp verify` (unit tests only: `./mvnw test`; one unit test: `./mvnw -Dtest=ModularityTest test`; only the Cucumber scenarios: `./mvnw -Dtest=CampaignDomainBehaviourTest test` (one tag: add `-Dcucumber.filter.tags="@R11"`; one feature: add `-Dcucumber.features=src/test/resources/features/campaigns/playlist.feature`); one integration test: `./mvnw verify -Dit.test=HealthEndpointIT -Dtest=NoMatch -Dsurefire.failIfNoSpecifiedTests=false`)
 - Web (`apps/web`): `npm ci`, then `npm run lint`, `npm run typecheck`, `npm run test` (single test: `npm run test -- src/test/App.test.tsx`), `npm run build`, and `docker build -t kiosko-web .`
 
 Component jobs skip until their project file exists (`pyproject.toml`, `pom.xml`, `package.json`). The single required check is `CI success`.

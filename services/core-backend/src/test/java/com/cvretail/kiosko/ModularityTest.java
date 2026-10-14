@@ -2,6 +2,9 @@ package com.cvretail.kiosko;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.cvretail.kiosko.campaigns.CampaignCatalog;
+import com.cvretail.kiosko.campaigns.CampaignView;
+import com.cvretail.kiosko.campaigns.domain.entity.Campaign;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -24,5 +27,14 @@ class ModularityTest {
     @Test
     void moduleStructureIsValid() {
         modules.verify();
+    }
+
+    @Test
+    void campaignsExposesTheViewAndTheCatalogButNotTheAggregate() {
+        var campaigns = modules.getModuleByName("campaigns").orElseThrow();
+
+        assertThat(campaigns.isExposed(CampaignView.class)).isTrue();
+        assertThat(campaigns.isExposed(CampaignCatalog.class)).isTrue();
+        assertThat(campaigns.isExposed(Campaign.class)).isFalse();
     }
 }
