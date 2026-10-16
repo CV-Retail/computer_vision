@@ -36,4 +36,25 @@ class ArchitectureTest {
     void domainBuildingBlocksDependOnlyOnTheAllowedOnes() {
         ArchitectureRules.DOMAIN_INTERNAL_LAYERING.check(production);
     }
+
+    @Test
+    void noClassReadsTheSystemClockOrZone() {
+        ArchitectureRules.NO_SYSTEM_CLOCK_ACCESS.check(production);
+    }
+
+    @Test
+    void domainsAreIndependentOfTheOtherModules() {
+        ArchitectureRules.CAMPAIGNS_DOMAIN_IS_INDEPENDENT.check(production);
+        ArchitectureRules.RULES_DOMAIN_IS_INDEPENDENT.check(production);
+        ArchitectureRules.REPORTS_DOMAIN_IS_INDEPENDENT.check(production);
+    }
+
+    @Test
+    void rulesPublishesNothingYet() {
+        long classesInTheBasePackage = production.stream()
+                .filter(c -> c.getPackageName().equals(ArchitectureRules.ROOT_PACKAGE + ".rules"))
+                .filter(c -> !c.getSimpleName().equals("package-info"))
+                .count();
+        org.assertj.core.api.Assertions.assertThat(classesInTheBasePackage).isZero();
+    }
 }

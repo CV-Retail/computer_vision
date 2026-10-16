@@ -1,3 +1,4 @@
+@KIO-24
 @R11
 Feature: Campaign life cycle
   A campaign moves from draft to scheduled or active, can be paused and resumed, and ends finished.

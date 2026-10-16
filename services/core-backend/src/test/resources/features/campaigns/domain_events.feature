@@ -1,3 +1,4 @@
+@KIO-24
 @R20
 Feature: Events recorded by a campaign
   A campaign tells what happened to it. Nobody publishes these events yet.

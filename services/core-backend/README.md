@@ -158,24 +158,67 @@ A campaign is **complete** when it has a non-empty playlist and, if regular, an 
 | borrador, programada, activa, pausada, finalizada | `DRAFT`, `SCHEDULED`, `ACTIVE`, `PAUSED`, `FINISHED` |
 | prioridad: alta, media, baja | `Priority`: `HIGH`, `MEDIUM`, `LOW` |
 
+## Rules engine: schedule and scope
+
+Step 1 of the engine (spec: `spec/KIO-25-rules-schedule-scope/`): which campaigns of a store may run on a kiosk right now. Vetoes, audience and priority (KIO-26 to KIO-28) narrow the list afterwards.
+
+```
+rules/
+├── application/FindCandidateCampaigns   candidatesFor(storeId, kioskId) and availabilityOf(campaign, kioskId)
+├── application/CampaignRunPlans         maps the published CampaignView to the rules domain (the only class that knows it)
+└── domain/
+    ├── service/AvailabilityEvaluator    the rules below, a pure function of the local date and time
+    └── valueobject/                     CampaignRunPlan, ScheduleWindow, DailySlot, KioskSelection, KioskId, Availability, ...
+```
+
+`rules` reads campaigns only through `CampaignCatalog` and `CampaignView`, and its `domain` does not depend on `campaigns`. Nothing in the base package of `rules` is published yet.
+
+A campaign is a candidate if every check passes, in this order (the first failure is the reason):
+
+1. **Status:** only `ACTIVE` and `SCHEDULED` are evaluated; `DRAFT`, `PAUSED` and `FINISHED` never are.
+2. **Start date** (included from 00:00) and **end date** (included until its last moment).
+3. **Day of the week.**
+4. **Time slot:** the start is included and the end is excluded (09:00 to 18:00 applies at 09:00:00 and not at 18:00:00). No slot means all day.
+5. **Scope:** all kiosks, or only the listed ones (exact, case sensitive id).
+
+A slot that crosses midnight (22:00 to 02:00) belongs to the day on which it started: the part after midnight is checked against the days of the week and the dates of that day. For a campaign on Monday only, from and to 2030-01-14, slot 22:00 to 02:00:
+
+| Local moment | Result |
+|---|---|
+| Mon 2030-01-14 21:59 | outside the time slot |
+| Mon 2030-01-14 22:00 and 23:59:59 | applies |
+| Tue 2030-01-15 00:00 and 01:59:59 | applies (the slot started on Monday) |
+| Tue 2030-01-15 02:00 | end date has passed |
+| Mon 2030-01-14 01:00 | start date has not arrived (belongs to Sunday) |
+
+`candidatesFor` returns the active campaigns first and then the scheduled ones, each group in the order of the catalog.
+
+**Time and zone.** The use case receives a `java.time.Clock`: the moment is `clock.instant()` and the zone is `clock.getZone()`, read once per call. No production class reads the system clock or the default zone (an architecture test enforces it). Rules are about **local wall time**, so on the days the clocks change a slot is shorter or longer in real time: on 2030-03-31 in Madrid the slot 02:30 to 02:45 never applies, and on 2030-10-27 a slot 02:00 to 03:00 lasts two real hours. The configured server zone, its display and the warning for a wrong server clock come with KIO-62; until then nothing builds the use case in the running application.
+
 ## Behavior-driven specification
 
-The business behavior of the campaign is written as Gherkin scenarios in English and run with Cucumber through JUnit:
+The business behavior of each domain is written as Gherkin scenarios in English and run with Cucumber through JUnit. Today there are two suites:
 
-- Scenarios: `src/test/resources/features/campaigns/*.feature`.
-- Step definitions: `src/test/java/com/cvretail/kiosko/campaigns/bdd/` (one steps class per feature area; `CampaignWorld` holds the state of one scenario).
-- Runner: `CampaignDomainBehaviourTest`, a `*Test` class, so `./mvnw test` runs the scenarios with the unit tests. No Spring context or database is involved.
+| Suite | Scenarios | Steps | Runner | Report |
+|---|---|---|---|---|
+| Campaign domain (KIO-24) | `src/test/resources/features/campaigns/` | `campaigns/bdd/` | `CampaignDomainBehaviourTest` | `target/cucumber-reports/campaigns.html` |
+| Rules: schedule and scope (KIO-25) | `src/test/resources/features/rules/` | `rules/bdd/` | `RulesBehaviourTest` | `target/cucumber-reports/rules.html` |
+
+- Each suite has one steps class per feature area and a `*World` class with the state of one scenario.
+- The runners are `*Test` classes, so `./mvnw test` runs the scenarios with the unit tests. No Spring context or database is involved.
 - Technical details (value object bounds, repository contract) are plain unit tests, not scenarios.
 
 ```bash
-./mvnw -B -ntp test                                                        # everything
-./mvnw -Dtest=CampaignDomainBehaviourTest test                             # only the scenarios
-./mvnw -Dtest=CampaignDomainBehaviourTest -Dcucumber.filter.tags="@R11" test   # one tag
-./mvnw -Dtest=CampaignDomainBehaviourTest \
-  -Dcucumber.features=src/test/resources/features/campaigns/playlist.feature test   # one feature
+./mvnw -B -ntp test                                                                        # everything
+./mvnw -Dtest=CampaignDomainBehaviourTest test                                             # only the campaign scenarios
+./mvnw -Dtest=RulesBehaviourTest test                                                      # only the rules scenarios
+./mvnw -Dtest=CampaignDomainBehaviourTest -Dcucumber.filter.tags="@KIO-24 and @R11" test   # one requirement
+./mvnw -Dtest=RulesBehaviourTest -Dcucumber.filter.tags="@KIO-25 and @R5" test             # one requirement
+./mvnw -Dtest=RulesBehaviourTest \
+  -Dcucumber.features=src/test/resources/features/rules/kiosk_scope.feature test           # one feature
 ```
 
-Every scenario carries tags with the requirement ids it verifies (`@R11`, `@R11.2`) from `spec/KIO-24-campaign-domain/requirements.md`, so `grep -r "@R12" src/test/resources/features` shows what covers a requirement. The HTML report is written to `target/cucumber-reports/campaigns.html` and is not committed.
+Every feature carries a tag with its task code (`@KIO-24`, `@KIO-25`) and every scenario the requirement ids it verifies (`@R11`, `@R11.2`) from `spec/<task>/requirements.md`. Requirement ids repeat across specs (`@R5` is the playlist in KIO-24 and the time slot in KIO-25), so a selection names the task too, as in `@KIO-25 and @R5`. `grep -rE "@R12\b" src/test/resources/features/campaigns` shows what covers a requirement. The HTML reports are written under `target/cucumber-reports/` and are not committed.
 
 ## Database independence
 

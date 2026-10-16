@@ -1,3 +1,4 @@
+@KIO-24
 @R6 @R7
 Feature: Schedule and scope
   A campaign runs on certain dates, days and hours, and on all kiosks or only on some.

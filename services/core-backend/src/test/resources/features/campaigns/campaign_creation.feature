@@ -1,3 +1,4 @@
+@KIO-24
 @R1
 Feature: Creating a campaign
   An administrator starts every campaign as a draft that may still be incomplete.
