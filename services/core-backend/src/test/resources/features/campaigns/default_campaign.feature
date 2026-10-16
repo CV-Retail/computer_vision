@@ -1,3 +1,4 @@
+@KIO-24
 @R10
 Feature: The default campaign
   The default campaign plays when no other campaign matches, so it has no targeting settings.

@@ -1,3 +1,4 @@
+@KIO-24
 @R12
 Feature: Editing a campaign
   Every field can be edited while the campaign is not finished.

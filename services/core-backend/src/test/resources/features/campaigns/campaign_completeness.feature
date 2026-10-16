@@ -1,3 +1,4 @@
+@KIO-24
 @R12
 Feature: A running campaign must be complete
   Drafts and paused campaigns may be incomplete, but a scheduled or active campaign never is.

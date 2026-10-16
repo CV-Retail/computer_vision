@@ -1,3 +1,4 @@
+@KIO-24
 @R5
 Feature: Playlist
   The playlist is an ordered list of media, each with its own duration.

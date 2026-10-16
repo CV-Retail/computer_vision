@@ -1,9 +1,29 @@
 package com.cvretail.kiosko;
 
+import static com.tngtech.archunit.core.domain.JavaCall.Predicates.target;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.belongToAnyOf;
+import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
+import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
+import static com.tngtech.archunit.core.domain.properties.HasParameterTypes.Predicates.rawParameterTypes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.lang.ArchRule;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.Year;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.TimeZone;
 
 /**
  * Clean Architecture rules of the backend (spec KIO-7, R12). The layers are empty in the skeleton,
@@ -78,6 +98,46 @@ final class ArchitectureRules {
             .whereLayer("ValueObject").mayOnlyBeAccessedByLayers("Event", "Service", "Entity", "Repository")
             .whereLayer("Exception").mayOnlyBeAccessedByLayers("ValueObject", "Service", "Entity")
             .allowEmptyShould(true);
+
+    private static DescribedPredicate<JavaCall<?>> noArgumentCall(String method, Class<?>... owners) {
+        return target(name(method)).and(target(rawParameterTypes(new Class<?>[0]))).and(target(owner(belongToAnyOf(owners))));
+    }
+
+    private static final DescribedPredicate<JavaMethodCall> READS_THE_SYSTEM_CLOCK_OR_ZONE =
+            DescribedPredicate.describe("read the system clock or the default time zone", call ->
+                    noArgumentCall("now", Instant.class, LocalDate.class, LocalTime.class, LocalDateTime.class,
+                            ZonedDateTime.class, OffsetDateTime.class, OffsetTime.class, Year.class, YearMonth.class)
+                            .test(call)
+                    || noArgumentCall("systemDefault", ZoneId.class).test(call)
+                    || noArgumentCall("getDefault", TimeZone.class).test(call)
+                    || noArgumentCall("currentTimeMillis", System.class).test(call));
+
+    /**
+     * Time comes from an injected {@code Clock} (spec KIO-25, R7.2): no production class reads the system clock
+     * or the default time zone by itself. The overloads that take a clock are allowed.
+     */
+    static final ArchRule NO_SYSTEM_CLOCK_ACCESS = noClasses()
+            .should().callMethodWhere(READS_THE_SYSTEM_CLOCK_OR_ZONE)
+            .because("time and zone must come from an injected Clock so tests can fix them")
+            .allowEmptyShould(true);
+
+    /** A domain package does not use other modules at all (spec KIO-25, R9.1). */
+    static ArchRule domainIsIndependentOf(String domainPackage, String... forbiddenPackages) {
+        return noClasses()
+                .that().resideInAPackage(domainPackage)
+                .should().dependOnClassesThat().resideInAnyPackage(forbiddenPackages)
+                .because("a domain is independent of the other modules; the application layer translates")
+                .allowEmptyShould(true);
+    }
+
+    static final ArchRule CAMPAIGNS_DOMAIN_IS_INDEPENDENT = domainIsIndependentOf(
+            ROOT_PACKAGE + ".campaigns.domain..", ROOT_PACKAGE + ".rules..", ROOT_PACKAGE + ".reports..");
+
+    static final ArchRule RULES_DOMAIN_IS_INDEPENDENT = domainIsIndependentOf(
+            ROOT_PACKAGE + ".rules.domain..", ROOT_PACKAGE + ".campaigns..", ROOT_PACKAGE + ".reports..");
+
+    static final ArchRule REPORTS_DOMAIN_IS_INDEPENDENT = domainIsIndependentOf(
+            ROOT_PACKAGE + ".reports.domain..", ROOT_PACKAGE + ".campaigns..", ROOT_PACKAGE + ".rules..");
 
     private ArchitectureRules() {
     }

@@ -47,6 +47,27 @@ class ArchitectureRulesDetectViolationsTest {
                 ArchitectureRules.publishedSurfaceIsSelfContained("com.cvretail.archfixtures.surface"), "BadView");
     }
 
+    @Test
+    void clockRuleFailsWhenAClassReadsTheSystemClock() {
+        assertFailsNaming(ArchitectureRules.NO_SYSTEM_CLOCK_ACCESS, "BadClockUser");
+    }
+
+    @Test
+    void clockRuleAllowsTheOverloadsThatTakeAClock() {
+        assertThatThrownBy(() -> ArchitectureRules.NO_SYSTEM_CLOCK_ACCESS.check(fixtures))
+                .isInstanceOf(AssertionError.class)
+                .satisfies(error -> org.assertj.core.api.Assertions.assertThat(error.getMessage())
+                        .doesNotContain("GoodClockUser"));
+    }
+
+    @Test
+    void independenceRuleFailsWhenADomainUsesAnotherModule() {
+        assertFailsNaming(
+                ArchitectureRules.domainIsIndependentOf(
+                        "com.cvretail.archfixtures.modules.alpha.domain..", "com.cvretail.archfixtures.modules.beta.."),
+                "AlphaDomain");
+    }
+
     private void assertFailsNaming(ArchRule rule, String offendingClass) {
         assertThatThrownBy(() -> rule.check(fixtures))
                 .isInstanceOf(AssertionError.class)
