@@ -1,6 +1,7 @@
 package com.cvretail.kiosko;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 
 import com.tngtech.archunit.lang.ArchRule;
 
@@ -40,6 +41,42 @@ final class ArchitectureRules {
             .that().resideOutsideOfPackages("..infrastructure..", ROOT_PACKAGE)
             .should().dependOnClassesThat().resideInAPackage("..infrastructure..")
             .because("only the Spring wiring may reference adapters")
+            .allowEmptyShould(true);
+
+    /**
+     * The published surface of a module (classes directly in its base package) is self-contained: it uses no
+     * internal package and no framework (spec KIO-24, R15.2).
+     */
+    static ArchRule publishedSurfaceIsSelfContained(String modulePackages) {
+        return noClasses()
+                .that().resideInAPackage(modulePackages)
+                .and().haveSimpleNameNotContaining("package-info")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "..domain..", "..application..", "..infrastructure..", "org.springframework..")
+                .because("other modules read the surface and must not be coupled to the internals")
+                .allowEmptyShould(true);
+    }
+
+    static final ArchRule PUBLISHED_SURFACE_IS_SELF_CONTAINED = publishedSurfaceIsSelfContained(ROOT_PACKAGE + ".*");
+
+    /**
+     * Dependencies between the building blocks of a domain (spec KIO-24, R19.3): exception depends on nothing;
+     * valueobject on exception; event on valueobject; service on valueobject and exception; entity on
+     * valueobject, event, exception and service; repository on entity and valueobject. Generic for every module.
+     */
+    static final ArchRule DOMAIN_INTERNAL_LAYERING = layeredArchitecture().consideringOnlyDependenciesInLayers()
+            .layer("Exception").definedBy("..domain.exception..")
+            .layer("ValueObject").definedBy("..domain.valueobject..")
+            .layer("Event").definedBy("..domain.event..")
+            .layer("Service").definedBy("..domain.service..")
+            .layer("Entity").definedBy("..domain.entity..")
+            .layer("Repository").definedBy("..domain.repository..")
+            .whereLayer("Repository").mayNotBeAccessedByAnyLayer()
+            .whereLayer("Entity").mayOnlyBeAccessedByLayers("Repository")
+            .whereLayer("Service").mayOnlyBeAccessedByLayers("Entity")
+            .whereLayer("Event").mayOnlyBeAccessedByLayers("Entity")
+            .whereLayer("ValueObject").mayOnlyBeAccessedByLayers("Event", "Service", "Entity", "Repository")
+            .whereLayer("Exception").mayOnlyBeAccessedByLayers("ValueObject", "Service", "Entity")
             .allowEmptyShould(true);
 
     private ArchitectureRules() {

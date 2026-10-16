@@ -22,6 +22,8 @@
     <spring-modulith.version>2.1.1</spring-modulith.version>
     <!-- Not managed by Spring Boot; same version that Spring Modulith depends on. -->
     <archunit.version>1.4.2</archunit.version>
+    <!-- Behavior-driven scenarios (test scope only); not managed by Spring Boot. -->
+    <cucumber.version>8.0.4</cucumber.version>
   </properties>
 
   <dependencyManagement>
@@ -30,6 +32,13 @@
         <groupId>org.springframework.modulith</groupId>
         <artifactId>spring-modulith-bom</artifactId>
         <version>${spring-modulith.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.cucumber</groupId>
+        <artifactId>cucumber-bom</artifactId>
+        <version>${cucumber.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -93,6 +102,26 @@
       <groupId>com.tngtech.archunit</groupId>
       <artifactId>archunit</artifactId>
       <version>${archunit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.cucumber</groupId>
+      <artifactId>cucumber-java</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.cucumber</groupId>
+      <artifactId>cucumber-junit-platform-engine</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.cucumber</groupId>
+      <artifactId>cucumber-picocontainer</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-suite</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

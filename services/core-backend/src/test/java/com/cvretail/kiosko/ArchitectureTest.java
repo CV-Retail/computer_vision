@@ -26,4 +26,14 @@ class ArchitectureTest {
     void infrastructureIsALeaf() {
         ArchitectureRules.INFRASTRUCTURE_IS_A_LEAF.check(production);
     }
+
+    @Test
+    void publishedSurfaceIsSelfContained() {
+        ArchitectureRules.PUBLISHED_SURFACE_IS_SELF_CONTAINED.check(production);
+    }
+
+    @Test
+    void domainBuildingBlocksDependOnlyOnTheAllowedOnes() {
+        ArchitectureRules.DOMAIN_INTERNAL_LAYERING.check(production);
+    }
 }
